@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>纳指定投工具 · 万能野人</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="js/alpine.min.js" defer></script>
+    <script src="js/chart.min.js"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans antialiased"
+      x-data="app()"
+      x-init="init()">
+
+    <!-- 顶部导航 -->
+    <header class="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
+        <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="text-lg font-bold text-blue-700">万能野人</span>
+                <span class="text-xs text-gray-400 hidden sm:inline">· 纳指定投工具</span>
+            </div>
+        </div>
+        <!-- 标签导航 -->
+        <div class="max-w-3xl mx-auto px-4">
+            <nav class="flex -mb-px text-sm font-medium">
+                <template x-for="(tab, idx) in tabs" :key="idx">
+                    <button @click="switchTab(idx)"
+                            :class="activeTab === idx ? 'tab-active' : 'tab-inactive'"
+                            class="flex-1 py-2.5 text-center border-b-2 transition-colors duration-150"
+                            x-text="tab">
+                    </button>
+                </template>
+            </nav>
+        </div>
+    </header>
+
+    <main class="max-w-3xl mx-auto px-4 py-6">
+
+        <!-- ========== 功能1：收益预测 ========== -->
+        <section x-show="activeTab === 0" x-cloak>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 sm:p-6">
+                <h2 class="text-lg font-bold mb-4">定投收益预测</h2>
+                <p class="text-sm text-gray-500 mb-5">输入你的定投计划，看看长期坚持的效果</p>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+                    <!-- 定投频率 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1.5">定投频率</label>
+                        <div class="flex gap-2">
+                            <template x-for="freq in ['每日','每周','每月']" :key="freq">
+                                <button @click="calc.freq = freq"
+                                        :class="calc.freq === freq ? 'btn-option-selected' : 'btn-option'"
+                                        class="flex-1 py-2 text-sm rounded-lg border transition-colors"
+                                        x-text="freq">
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                    <!-- 每期金额 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1.5">每期金额（元）</label>
+                        <input type="number" x-model="calc.amount" min="1" max="999999"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                    </div>
+                    <!-- 年化收益率 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1.5">
+                            预期年化收益率：<span class="text-blue-600 font-bold" x-text="calc.rate + '%'"></span>
+                        </label>
+                        <input type="range" x-model="calc.rate" min="1" max="30" step="0.5"
+                               class="w-full accent-blue-600">
+                        <div class="flex justify-between text-xs text-gray-400 mt-0.5">
+                            <span>1%</span><span>30%</span>
+                        </div>
+                    </div>
+                    <!-- 投资年限 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1.5">
+                            投资年限：<span class="text-blue-600 font-bold" x-text="calc.years + '年'"></span>
+                        </label>
+                        <input type="range" x-model="calc.years" min="1" max="40" step="1"
+                               class="w-full accent-blue-600">
+                        <div class="flex justify-between text-xs text-gray-400 mt-0.5">
+                            <span>1年</span><span>40年</span>
+                        </div>
+                    </div>
+                </div>
+
+                <button @click="runCalc()"
+                        class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors text-sm">
+                    计算收益
+                </button>
+
+                <!-- 结果区 -->
+                <div x-show="calcResult.show" x-cloak class="mt-6 space-y-4">
+                    <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 text-center">
+                        <p class="text-sm text-gray-500" x-text="calcResult.summary"></p>
+                        <p class="text-2xl font-bold text-blue-700 mt-1" x-text="calcResult.totalValue"></p>
+                        <p class="text-sm mt-1">
+                            <span class="text-gray-500">投入本金：</span>
+                            <span class="font-semibold" x-text="calcResult.totalInvested"></span>
+                            <span class="text-gray-400 mx-2">|</span>
+                            <span class="text-gray-500">收益：</span>
+                            <span class="font-semibold text-green-600" x-text="calcResult.totalEarnings"></span>
+                        </p>
+                    </div>
+
+                    <!-- 退休提取模拟 -->
+                    <div class="bg-white rounded-lg border border-gray-200 p-4">
+                        <h3 class="text-sm font-bold mb-1">退休提取模拟</h3>
+                        <p class="text-xs text-gray-400 mb-3">攒够了，开始每月领钱 —— 基于总市值 × 年化提取率 ÷ 12</p>
+
+                        <div class="mb-3">
+                            <label class="block text-sm text-gray-600 mb-1.5">年化提取率</label>
+                            <div class="flex gap-2">
+                                <template x-for="rate in [3, 3.5, 4, 4.5, 5]" :key="rate">
+                                    <button @click="calc.withdrawalRate = rate"
+                                            :class="calc.withdrawalRate === rate ? 'btn-option-selected' : 'btn-option'"
+                                            class="flex-1 py-1.5 text-sm rounded-lg border transition-colors"
+                                            x-text="rate + '%'">
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+
+                        <div class="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-4 text-center">
+                            <p class="text-sm text-gray-500">每月可提取</p>
+                            <p class="text-2xl font-bold text-green-700 mt-1">
+                                ¥<span x-text="Number(Math.round(monthlyWithdrawal)).toLocaleString('zh-CN')"></span>
+                            </p>
+                            <p class="text-sm mt-1">
+                                <span class="text-gray-500">每年可提取：</span>
+                                <span class="font-semibold text-green-600">
+                                    ¥<span x-text="Number(Math.round(annualWithdrawal)).toLocaleString('zh-CN')"></span>
+                                </span>
+                                <span class="text-gray-400 mx-2">|</span>
+                                <span class="text-gray-500">提取率：</span>
+                                <span class="font-semibold" x-text="calc.withdrawalRate + '%'"></span>
+                            </p>
+                        </div>
+
+                        <!-- 长期提取推演 -->
+                        <div class="mt-3 pt-3 border-t border-gray-100">
+                            <p class="text-xs font-medium text-gray-500 mb-1">
+                                长期提取推演（资金继续按年化 <span class="font-semibold" x-text="calc.rate + '%'"></span> 增值）
+                            </p>
+                            <div class="flex items-center gap-3 mt-2">
+                                <span class="text-xs text-gray-500">提取</span>
+                                <input type="range" x-model="calc.withdrawalYears" min="1" max="50" step="1"
+                                       class="flex-1 accent-blue-600" style="height:4px;">
+                                <span class="text-xs font-semibold text-gray-700 min-w-[3rem] text-right" x-text="calc.withdrawalYears + '年'"></span>
+                            </div>
+                            <div class="bg-gray-50 rounded-lg p-3 mt-2 text-center">
+                                <p class="text-xs text-gray-500">
+                                    <span x-text="calc.withdrawalYears"></span>年后账户还剩
+                                </p>
+                                <p class="text-lg font-bold text-blue-700 mt-0.5">
+                                    ¥<span x-text="Number(balanceAfterWithdrawal).toLocaleString('zh-CN')"></span>
+                                </p>
+                                <p class="text-xs text-gray-400 mt-0.5">
+                                    <!-- 比较：比初始多了还是少了 -->
+                                    <template x-if="balanceAfterWithdrawal >= calcResult.totalValueNum">
+                                        <span class="text-green-600">💰 比提取前还多了</span>
+                                    </template>
+                                    <template x-if="balanceAfterWithdrawal > 0 && balanceAfterWithdrawal < calcResult.totalValueNum">
+                                        <span>还剩初始的 <span x-text="(balanceAfterWithdrawal / calcResult.totalValueNum * 100).toFixed(0) + '%'"></span></span>
+                                    </template>
+                                    <template x-if="balanceAfterWithdrawal <= 0">
+                                        <span class="text-red-600">⚠️ 已耗尽</span>
+                                    </template>
+                                </p>
+                            </div>
+                        </div>
+
+                        <p class="text-xs text-gray-400 mt-2 bg-gray-50 rounded-lg p-2 leading-relaxed">
+                            ⚠️ 基于"4%法则"的简单估算。实际退休提取还需考虑通胀、市场波动和长寿风险，此处仅供模拟参考。
+                        </p>
+                    </div>
+
+                    <div class="text-xs text-gray-400 bg-gray-50 rounded-lg p-3 leading-relaxed">
+                        ⚠️ 以上计算为基于历史数据的简单外推，不构成收益承诺。实际投资有盈亏，过往业绩不预示未来表现。基金有风险，投资需谨慎。
+                    </div>
+                    <div class="chart-container" style="height:280px;">
+                        <canvas x-ref="calcChart"></canvas>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs sm:text-sm" x-show="calcResult.table.length > 0">
+                            <thead>
+                                <tr class="bg-gray-50 border-b">
+                                    <th class="text-left py-2 px-2">年份</th>
+                                    <th class="text-right py-2 px-2">投入本金</th>
+                                    <th class="text-right py-2 px-2">总价值</th>
+                                    <th class="text-right py-2 px-2 hidden sm:table-cell">总收益</th>
+                                    <th class="text-right py-2 px-2 hidden sm:table-cell text-green-600">每年新增收益</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="row in calcResult.table" :key="row.year">
+                                    <tr class="border-b border-gray-100 hover:bg-gray-50">
+                                        <td class="py-1.5 px-2" x-text="'第' + row.year + '年'"></td>
+                                        <td class="text-right py-1.5 px-2" x-text="fmt(row.invested)"></td>
+                                        <td class="text-right py-1.5 px-2 font-medium" x-text="fmt(row.value)"></td>
+                                        <td class="text-right py-1.5 px-2 text-green-600 hidden sm:table-cell" x-text="fmt(row.earning)"></td>
+                                        <td class="text-right py-1.5 px-2 text-blue-600 hidden sm:table-cell" x-text="fmt(row.yearEarning)"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========== 功能2：限购应对 ========== -->
+        <section x-show="activeTab === 1" x-cloak>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 sm:p-6">
+                <h2 class="text-lg font-bold mb-4">基金限购应对指南</h2>
+                <p class="text-sm text-gray-500 mb-5">纳指QDII基金普遍限购，帮你找到解决方案</p>
+
+                <div class="space-y-4 mb-5">
+                    <!-- 选择基金 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1.5">你的基金</label>
+                        <select x-model="limit.selectedFund"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                            <option value="">-- 请选择 --</option>
+                            <template x-for="(info, code) in fundDB" :key="code">
+                                <option :value="code" x-text="info.name + ' (' + code + ')'"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <!-- 显示当前限额 -->
+                    <div x-show="limit.selectedFund" class="text-sm bg-gray-50 rounded-lg p-3">
+                        <template x-if="limit.selectedFund && fundDB[limit.selectedFund]">
+                            <div class="space-y-1">
+                                <p>管理费：<span class="font-medium" x-text="fundDB[limit.selectedFund].fee"></span></p>
+                                <p>规模：<span class="font-medium" x-text="fundDB[limit.selectedFund].size"></span></p>
+                                <p>
+                                    当前状态：
+                                    <span class="font-medium"
+                                          :class="fundDB[limit.selectedFund].limit === 0 ? 'text-red-600' : 'text-green-600'"
+                                          x-text="fundDB[limit.selectedFund].limitDesc">
+                                    </span>
+                                </p>
+                            </div>
+                        </template>
+                    </div>
+                    <!-- 每月投入目标 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1.5">每月计划定投金额（元）</label>
+                        <input type="number" x-model="limit.monthlyGoal" min="0" max="999999"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                    </div>
+                </div>
+
+                <button @click="runLimitAdvisor()"
+                        :disabled="!limit.selectedFund || !limit.monthlyGoal"
+                        :class="!limit.selectedFund || !limit.monthlyGoal ? 'opacity-50 cursor-not-allowed' : ''"
+                        class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors text-sm">
+                    生成应对方案
+                </button>
+
+                <!-- 结果 -->
+                <div x-show="limitResult.show" x-cloak class="mt-6 space-y-4">
+                    <div class="rounded-lg p-4"
+                         :class="limitResult.type === 'ok' ? 'bg-green-50 border border-green-200' :
+                                 limitResult.type === 'warn' ? 'bg-yellow-50 border border-yellow-200' :
+                                 'bg-red-50 border border-red-200'">
+                        <p class="font-bold text-base" x-text="limitResult.title"></p>
+                        <div class="mt-2 text-sm space-y-1.5" x-html="limitResult.detail"></div>
+                    </div>
+                    <!-- 替代基金推荐 -->
+                    <div x-show="limitResult.alternatives.length > 0" class="bg-gray-50 rounded-lg p-4">
+                        <p class="text-sm font-bold mb-2">替代基金推荐：</p>
+                        <div class="space-y-2">
+                            <template x-for="alt in limitResult.alternatives" :key="alt.code">
+                                <div class="bg-white rounded-lg p-3 border border-gray-200 text-sm">
+                                    <p class="font-medium" x-text="alt.name + ' (' + alt.code + ')'"></p>
+                                    <p class="text-gray-500 text-xs mt-0.5">
+                                        费率 <span x-text="alt.fee"></span> ·
+                                        <span x-text="alt.limitDesc"></span> ·
+                                        规模 <span x-text="alt.size"></span>
+                                    </p>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========== 功能3：动态定投 ========== -->
+        <section x-show="activeTab === 2" x-cloak>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 sm:p-6">
+                <h2 class="text-lg font-bold mb-4">动态定投计算器</h2>
+                <p class="text-sm text-gray-500 mb-3">低估多买，高估少买——比普通定投更聪明</p>
+
+                <!-- 一键获取实时数据 -->
+                <button @click="fetchMarketData()" :disabled="fetchingData"
+                        class="w-full mb-4 py-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
+                    <span x-text="fetchingData ? '⏳' : '📡'"></span>
+                    <span x-text="fetchingData ? '获取中...' : '一键获取实时数据（NDX+MA60+PE）'"></span>
+                </button>
+                <div x-show="fetchMsg" class="text-xs text-center mb-4" :class="fetchMsg.includes('✅') ? 'text-green-600' : 'text-yellow-600'" x-text="fetchMsg"></div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1.5">定投频率</label>
+                        <div class="flex gap-2">
+                            <template x-for="freq in ['每日','每周','每月']" :key="freq">
+                                <button @click="dyna.freq = freq"
+                                        :class="dyna.freq === freq ? 'btn-option-selected' : 'btn-option'"
+                                        class="flex-1 py-2 text-sm rounded-lg border transition-colors"
+                                        x-text="freq">
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1.5">基准金额（元）</label>
+                        <input type="number" x-model="dyna.baseAmount" min="1" max="999999"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                    </div>
+                </div>
+
+                <!-- 策略选择 -->
+                <div class="mb-5 space-y-4">
+                    <p class="text-sm font-medium text-gray-600">策略</p>
+                    <!-- 策略A：PE法 -->
+                    <div class="border border-gray-200 rounded-lg p-4">
+                        <label class="flex items-start gap-3 cursor-pointer">
+                            <input type="radio" x-model="dyna.strategy" value="pe"
+                                   class="mt-0.5 accent-blue-600">
+                            <div class="flex-1">
+                                <p class="text-sm font-medium">策略A：PE估值法</p>
+                                <p class="text-xs text-gray-400 mt-0.5">市场便宜时多买，贵时少买</p>
+                            </div>
+                        </label>
+                        <div x-show="dyna.strategy === 'pe'" class="mt-3 pl-7 space-y-3">
+                            <!-- 模式选择 -->
+                            <div class="flex gap-2 bg-gray-50 rounded-lg p-1">
+                                <button @click="dyna.peMode = 'standard'"
+                                        :class="dyna.peMode === 'standard' ? 'bg-white shadow-sm font-medium text-blue-700' : 'text-gray-500'"
+                                        class="flex-1 py-1.5 text-xs rounded-md transition-all">
+                                    标准模式
+                                </button>
+                                <button @click="dyna.peMode = 'range'"
+                                        :class="dyna.peMode === 'range' ? 'bg-white shadow-sm font-medium text-blue-700' : 'text-gray-500'"
+                                        class="flex-1 py-1.5 text-xs rounded-md transition-all">
+                                    区间模式 ⭐
+                                </button>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">当前纳斯达克100 PE</label>
+                                <input type="number" x-model="dyna.currentPE" step="0.1"
+                                       class="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+
+                            <!-- 标准模式：参考PE -->
+                            <div x-show="dyna.peMode === 'standard'">
+                                <label class="block text-xs text-gray-500 mb-1">参考PE（历史均值）</label>
+                                <input type="number" x-model="dyna.referencePE" step="0.1"
+                                       class="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+
+                            <!-- 区间模式：参考表 -->
+                            <div x-show="dyna.peMode === 'range'" class="bg-gray-50 rounded-lg p-2.5">
+                                <p class="text-xs font-medium text-gray-600 mb-1.5">PE区间参考表</p>
+                                <div class="space-y-1">
+                                    <div class="flex items-center text-xs px-2 py-1 rounded"
+                                         :class="dyna.currentPE > 35 ? 'bg-red-100 text-red-700 font-medium' : 'text-gray-500'">
+                                        <span class="w-16">> 35</span>
+                                        <span class="flex-1">严重高估</span>
+                                        <span class="font-semibold">×0.5</span>
+                                    </div>
+                                    <div class="flex items-center text-xs px-2 py-1 rounded"
+                                         :class="dyna.currentPE > 30 && dyna.currentPE <= 35 ? 'bg-orange-100 text-orange-700 font-medium' : 'text-gray-500'">
+                                        <span class="w-16">30~35</span>
+                                        <span class="flex-1">偏高估</span>
+                                        <span class="font-semibold">×0.8</span>
+                                    </div>
+                                    <div class="flex items-center text-xs px-2 py-1 rounded"
+                                         :class="dyna.currentPE > 23 && dyna.currentPE <= 30 ? 'bg-green-100 text-green-700 font-medium' : 'text-gray-500'">
+                                        <span class="w-16">23~30</span>
+                                        <span class="flex-1">估值合理</span>
+                                        <span class="font-semibold">×1.0</span>
+                                    </div>
+                                    <div class="flex items-center text-xs px-2 py-1 rounded"
+                                         :class="dyna.currentPE > 18 && dyna.currentPE <= 23 ? 'bg-blue-100 text-blue-700 font-medium' : 'text-gray-500'">
+                                        <span class="w-16">18~23</span>
+                                        <span class="flex-1">偏低估</span>
+                                        <span class="font-semibold">×1.3</span>
+                                    </div>
+                                    <div class="flex items-center text-xs px-2 py-1 rounded"
+                                         :class="dyna.currentPE <= 18 ? 'bg-purple-100 text-purple-700 font-medium' : 'text-gray-500'">
+                                        <span class="w-16">< 18</span>
+                                        <span class="flex-1">严重低估</span>
+                                        <span class="font-semibold">×1.8</span>
+                                    </div>
+                                </div>
+                                <p class="text-[10px] text-gray-400 mt-1.5">当前PE=<span x-text="dyna.currentPE"></span> 会在对应行高亮</p>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 策略B：均线法 -->
+                    <div class="border border-gray-200 rounded-lg p-4">
+                        <label class="flex items-start gap-3 cursor-pointer">
+                            <input type="radio" x-model="dyna.strategy" value="ma"
+                                   class="mt-0.5 accent-blue-600">
+                            <div class="flex-1">
+                                <p class="text-sm font-medium">策略B：均线偏离法</p>
+                                <p class="text-xs text-gray-400 mt-0.5">指数跌到均线以下多买，涨过均线少买</p>
+                            </div>
+                        </label>
+                        <div x-show="dyna.strategy === 'ma'" class="mt-3 pl-7 space-y-3">
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">当前指数点位</label>
+                                <input type="number" x-model="dyna.currentPrice" step="1"
+                                       class="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">参考均线（如60日均线）</label>
+                                <input type="number" x-model="dyna.referenceMA" step="1"
+                                       class="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">偏离倍数（默认为2，越大调整越激进）</label>
+                                <input type="number" x-model="dyna.multiplier" step="0.1"
+                                       class="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 上下限 -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">最低投入（基准的）</label>
+                            <select x-model="dyna.minPct" class="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white">
+                                <option value="0.1">10%</option>
+                                <option value="0.3">30%</option>
+                                <option value="0.5" selected>50%</option>
+                                <option value="0.7">70%</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">最高投入（基准的）</label>
+                            <select x-model="dyna.maxPct" class="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white">
+                                <option value="1.5">150%</option>
+                                <option value="2" selected>200%</option>
+                                <option value="3">300%</option>
+                                <option value="5">500%</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <button @click="runDyna()"
+                        class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors text-sm">
+                    计算建议金额
+                </button>
+
+                <!-- 结果 -->
+                <div x-show="dynaResult.show" x-cloak class="mt-6 space-y-4">
+                    <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 text-center">
+                        <p class="text-sm text-gray-500">建议投入金额</p>
+                        <p class="text-3xl font-bold text-blue-700 mt-1" x-text="dynaResult.suggested"></p>
+                        <p class="text-sm mt-1">
+                            <span class="text-gray-500">基准：</span>
+                            <span class="font-medium" x-text="dynaResult.baseDisplay"></span>
+                            <span class="text-gray-400 mx-2">|</span>
+                            <span :class="dynaResult.change >= 0 ? 'text-green-600' : 'text-red-600'"
+                                  class="font-medium"
+                                  x-text="dynaResult.changeDisplay"></span>
+                        </p>
+                        <p class="text-xs text-gray-400 mt-2" x-text="dynaResult.reason"></p>
+                        <div x-show="dynaResult.peRangeLabel"
+                             class="mt-2 inline-block text-xs font-semibold px-2 py-0.5 rounded-full"
+                             :class="dynaResult.peRangeCoeff < 1 ? 'bg-red-100 text-red-600' :
+                                     dynaResult.peRangeCoeff > 1 ? 'bg-green-100 text-green-600' :
+                                     'bg-gray-100 text-gray-600'">
+                            📊 <span x-text="dynaResult.peRangeLabel"></span> · 系数 <span x-text="dynaResult.peRangeCoeff"></span>
+                        </div>
+                    </div>
+                    <!-- 对比图表 -->
+                    <div class="chart-container" style="height:250px;">
+                        <canvas x-ref="dynaChart"></canvas>
+                    </div>
+                    <div class="text-xs text-gray-400 bg-gray-50 rounded-lg p-3 leading-relaxed">
+                        ⚠️ 动态定投策略仅供参考，不构成投资建议。市场有风险，决策需谨慎。
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========== 功能4：费用计算 ========== -->
+        <section x-show="activeTab === 3" x-cloak>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 sm:p-6">
+                <h2 class="text-lg font-bold mb-4">基金费用计算器</h2>
+                <p class="text-sm text-gray-500 mb-5">算清每一笔费用，看看A类C类到底差多少</p>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1.5">定投频率</label>
+                        <div class="flex gap-2">
+                            <template x-for="freq in ['每日','每周','每月']" :key="freq">
+                                <button @click="fee.freq = freq"
+                                        :class="fee.freq === freq ? 'btn-option-selected' : 'btn-option'"
+                                        class="flex-1 py-2 text-sm rounded-lg border transition-colors"
+                                        x-text="freq">
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1.5">每期金额（元）</label>
+                        <input type="number" x-model="fee.amount" min="1" max="999999"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1.5">定投年限</label>
+                        <div class="flex items-center gap-3">
+                            <input type="range" x-model="fee.years" min="0.5" max="30" step="0.5"
+                                   class="flex-1 accent-blue-600" style="height:4px;">
+                            <span class="text-sm font-bold text-blue-600 min-w-[3rem] text-right" x-text="fee.years + '年'"></span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1.5">
+                            预期年化收益：<span class="text-blue-600 font-bold" x-text="fee.annualReturn + '%'"></span>
+                        </label>
+                        <input type="range" x-model="fee.annualReturn" min="1" max="30" step="0.5"
+                               class="w-full accent-blue-600" style="height:4px;">
+                        <div class="flex justify-between text-xs text-gray-400 mt-0.5">
+                            <span>1%</span><span>30%</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1.5">基金类型</label>
+                        <div class="flex gap-2">
+                            <button @click="fee.fundClass = 'a'"
+                                    :class="fee.fundClass === 'a' ? 'btn-option-selected' : 'btn-option'"
+                                    class="flex-1 py-2 text-sm rounded-lg border transition-colors">
+                                A类（前端收费）
+                            </button>
+                            <button @click="fee.fundClass = 'c'"
+                                    :class="fee.fundClass === 'c' ? 'btn-option-selected' : 'btn-option'"
+                                    class="flex-1 py-2 text-sm rounded-lg border transition-colors">
+                                C类（销售服务费）
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 费率设置（可折叠） -->
+                <div class="mb-5">
+                    <button @click="toggleFeeRates()"
+                            class="flex items-center gap-1 text-xs text-gray-500 hover:text-blue-600 transition-colors">
+                        <span x-text="fee.showRates ? '▼' : '▶'"></span>
+                        自定义费率
+                        <span class="text-gray-300 ml-1">（通常无需修改）</span>
+                    </button>
+                    <div x-show="fee.showRates" x-cloak class="mt-3 p-4 bg-gray-50 rounded-lg">
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+                            <!-- A类费率 -->
+                            <div>
+                                <p class="font-semibold text-gray-700 mb-2">A类费率</p>
+                                <div class="space-y-2">
+                                    <div><label class="text-gray-500">申购费</label>
+                                        <input type="number" x-model="fee.rates.a.subscriptionRate" step="0.0001" class="w-full px-2 py-1 border rounded text-xs"></div>
+                                    <div><label class="text-gray-500">管理费/年</label>
+                                        <input type="number" x-model="fee.rates.a.managementRate" step="0.001" class="w-full px-2 py-1 border rounded text-xs"></div>
+                                    <div><label class="text-gray-500">托管费/年</label>
+                                        <input type="number" x-model="fee.rates.a.custodyRate" step="0.001" class="w-full px-2 py-1 border rounded text-xs"></div>
+                                    <div><label class="text-gray-500">赎回费</label>
+                                        <input type="number" x-model="fee.rates.a.redemptionRate" step="0.001" class="w-full px-2 py-1 border rounded text-xs"></div>
+                                    <div><label class="text-gray-500">免赎回(年)</label>
+                                        <input type="number" x-model="fee.rates.a.redemptionFreeAfter" step="0.1" class="w-full px-2 py-1 border rounded text-xs"></div>
+                                </div>
+                            </div>
+                            <!-- C类费率 -->
+                            <div>
+                                <p class="font-semibold text-gray-700 mb-2">C类费率</p>
+                                <div class="space-y-2">
+                                    <div><label class="text-gray-500">申购费</label>
+                                        <input type="number" x-model="fee.rates.c.subscriptionRate" step="0.0001" class="w-full px-2 py-1 border rounded text-xs"></div>
+                                    <div><label class="text-gray-500">管理费/年</label>
+                                        <input type="number" x-model="fee.rates.c.managementRate" step="0.001" class="w-full px-2 py-1 border rounded text-xs"></div>
+                                    <div><label class="text-gray-500">托管费/年</label>
+                                        <input type="number" x-model="fee.rates.c.custodyRate" step="0.001" class="w-full px-2 py-1 border rounded text-xs"></div>
+                                    <div><label class="text-gray-500">销售服务费/年</label>
+                                        <input type="number" x-model="fee.rates.c.salesServiceRate" step="0.001" class="w-full px-2 py-1 border rounded text-xs"></div>
+                                    <div><label class="text-gray-500">赎回费</label>
+                                        <input type="number" x-model="fee.rates.c.redemptionRate" step="0.001" class="w-full px-2 py-1 border rounded text-xs"></div>
+                                    <div><label class="text-gray-500">免赎回(年)</label>
+                                        <input type="number" x-model="fee.rates.c.redemptionFreeAfter" step="0.01" class="w-full px-2 py-1 border rounded text-xs"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <button @click="resetFeeRates()" class="mt-3 text-xs text-blue-600 hover:underline">恢复默认</button>
+                    </div>
+                </div>
+
+                <button @click="runFee()"
+                        class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors text-sm">
+                    计算费用
+                </button>
+
+                <!-- 结果区 -->
+                <div x-show="feeResult.show" x-cloak class="mt-6 space-y-4">
+
+                    <!-- 费用明细 -->
+                    <div class="bg-gradient-to-r from-orange-50 to-amber-50 rounded-lg p-4">
+                        <p class="text-sm font-bold mb-2">💰 费用明细 · <span x-text="feeResult.fundClass"></span></p>
+                        <p class="text-xs text-gray-500 mb-3">
+                            总投入：¥<span x-text="Number(feeResult.summary.totalInvested).toLocaleString('zh-CN')"></span>
+                            · 总费用：<span class="text-red-500 font-semibold">¥<span x-text="Number(feeResult.summary.totalFees).toLocaleString('zh-CN')"></span></span>
+                        </p>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                            <div class="bg-white/70 rounded p-2 text-center">
+                                <p class="text-xs text-gray-500">申购费</p>
+                                <p class="font-semibold" x-text="'¥' + Number(feeResult.summary.subscriptionFee).toLocaleString('zh-CN')"></p>
+                            </div>
+                            <div class="bg-white/70 rounded p-2 text-center">
+                                <p class="text-xs text-gray-500">年度总费用</p>
+                                <p class="font-semibold" x-text="'¥' + Number(feeResult.summary.totalAnnualFees).toLocaleString('zh-CN')"></p>
+                                <p class="text-[10px] text-gray-400">管理+托管+销售服务</p>
+                            </div>
+                            <div class="bg-white/70 rounded p-2 text-center">
+                                <p class="text-xs text-gray-500">赎回费</p>
+                                <p class="font-semibold" x-text="'¥' + Number(feeResult.summary.redemptionFee).toLocaleString('zh-CN')"></p>
+                            </div>
+                            <div class="bg-white/70 rounded p-2 text-center">
+                                <p class="text-xs text-gray-500">总费用</p>
+                                <p class="font-semibold text-red-600" x-text="'¥' + Number(feeResult.summary.totalFees).toLocaleString('zh-CN')"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 费用侵蚀 -->
+                    <div class="bg-white border border-gray-200 rounded-lg p-4">
+                        <p class="text-sm font-bold mb-2">📊 费用对收益的影响</p>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                            <div class="text-center bg-gray-50 rounded p-3">
+                                <p class="text-xs text-gray-500">假设无费用</p>
+                                <p class="font-bold text-blue-700 mt-0.5">¥<span x-text="Number(feeResult.result.finalNoFee).toLocaleString('zh-CN')"></span></p>
+                            </div>
+                            <div class="text-center bg-gray-50 rounded p-3">
+                                <p class="text-xs text-gray-500">扣除费用后</p>
+                                <p class="font-bold text-green-700 mt-0.5">¥<span x-text="Number(feeResult.result.finalValue).toLocaleString('zh-CN')"></span></p>
+                            </div>
+                            <div class="text-center bg-red-50 rounded p-3">
+                                <p class="text-xs text-gray-500">费用侵蚀</p>
+                                <p class="font-bold text-red-600 mt-0.5">
+                                    ¥<span x-text="Number(feeResult.result.feeImpact).toLocaleString('zh-CN')"></span>
+                                    <span class="text-xs font-normal" x-text="'(' + feeResult.result.feeImpactPct + '%)'"></span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- A/C 对比 -->
+                    <div class="bg-white border border-gray-200 rounded-lg p-4">
+                        <p class="text-sm font-bold mb-2">⚖️ A类 vs C类 对比</p>
+                        <div class="grid grid-cols-2 gap-3 text-sm mb-3">
+                            <div class="text-center bg-blue-50 rounded p-3" :class="feeResult.comparison.better === 'A' ? 'ring-2 ring-blue-400' : ''">
+                                <p class="text-xs text-gray-500">A类最终价值</p>
+                                <p class="font-bold text-blue-700 mt-0.5">¥<span x-text="feeResult.comparison.finalA"></span></p>
+                            </div>
+                            <div class="text-center bg-green-50 rounded p-3" :class="feeResult.comparison.better === 'C' ? 'ring-2 ring-green-400' : ''">
+                                <p class="text-xs text-gray-500">C类最终价值</p>
+                                <p class="font-bold text-green-700 mt-0.5">¥<span x-text="feeResult.comparison.finalC"></span></p>
+                            </div>
+                        </div>
+                        <div class="text-xs bg-gray-50 rounded p-3 leading-relaxed">
+                            <p>
+                                <span class="font-semibold">推荐选择：</span>
+                                <span class="font-bold" :class="feeResult.comparison.better === 'A' ? 'text-blue-600' : 'text-green-600'" x-text="feeResult.comparison.better + '类'"></span>
+                                <span class="text-gray-500"> — 相差 ¥<span x-text="feeResult.comparison.diff"></span>（<span x-text="feeResult.comparison.diffPct"></span>%）</span>
+                            </p>
+                            <p class="mt-1" x-text="feeResult.comparison.recommendation"></p>
+                            <p class="mt-1 text-gray-400">
+                                <template x-if="feeResult.comparison.breakEvenYear">
+                                    <span>A类约在 <span class="font-semibold" x-text="feeResult.comparison.breakEvenYear"></span> 年后性价比超过C类</span>
+                                </template>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="text-xs text-gray-400 bg-gray-50 rounded-lg p-3 leading-relaxed">
+                        ⚠️ 以上计算基于默认费率参数的模拟，实际费率以基金合同为准。不同销售渠道（支付宝/天天基金/银行）申购费折扣不同。
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- 底部 -->
+    <footer class="bg-white border-t border-gray-200 mt-8">
+        <div class="max-w-3xl mx-auto px-4 py-4 text-center text-xs text-gray-400">
+            <p>由 <span class="text-blue-600">@万能野人</span> 制作 · 数据仅供参考 · 基金有风险，投资需谨慎</p>
+            <p class="mt-1">定投纳斯达克20年 · 每日实盘记录</p>
+        </div>
+    </footer>
+
+    <script src="js/calculator.js"></script>
+    <script src="js/fee-calculator.js"></script>
+    <script src="js/limit-advisor.js"></script>
+    <script src="js/dynamic-dca.js"></script>
+    <script>
+        function app() {
+            return {
+                tabs: ['📈 收益预测', '🛡️ 限购应对', '🎯 动态定投', '💰 费用计算'],
+                activeTab: 0,
+
+                // 功能1: 计算器
+                calc: { freq: '每日', amount: 100, rate: 10, years: 20, withdrawalRate: 4, withdrawalYears: 10 },
+                calcResult: { show: false, summary: '', totalValue: '', totalInvested: '', totalEarnings: '', table: [], totalValueNum: 0 },
+
+                // 退休提取模拟（基于总市值 × 提取率 ÷ 12）
+                get monthlyWithdrawal() {
+                    return this.calcResult.totalValueNum * (this.calc.withdrawalRate / 100) / 12;
+                },
+                get annualWithdrawal() {
+                    return this.calcResult.totalValueNum * (this.calc.withdrawalRate / 100);
+                },
+                // 长期提取推演：固定提取额 × N年，剩余资金继续增值
+                get balanceAfterWithdrawal() {
+                    let balance = this.calcResult.totalValueNum;
+                    if (!balance) return 0;
+                    const withdrawAmt = balance * (this.calc.withdrawalRate / 100);
+                    const growthRate = this.calc.rate / 100;
+                    const years = this.calc.withdrawalYears;
+                    for (let y = 1; y <= years; y++) {
+                        balance = balance * (1 + growthRate) - withdrawAmt;
+                    }
+                    return Math.round(Math.max(0, balance));
+                },
+
+                // 功能2: 限购
+                limit: { selectedFund: '', monthlyGoal: '' },
+                limitResult: { show: false, type: 'ok', title: '', detail: '', alternatives: [] },
+                fundDB: {},
+
+                // 功能3: 动态定投
+                dyna: {
+                    freq: '每日', baseAmount: 100,
+                    strategy: 'pe', peMode: 'standard', currentPE: 37, referencePE: 25,
+                    currentPrice: 18000, referenceMA: 19500, multiplier: 2,
+                    minPct: 0.5, maxPct: 2
+                },
+                dynaResult: { show: false, suggested: '', baseDisplay: '', change: 0, changeDisplay: '', reason: '' },
+
+                // 数据获取状态
+                fetchingData: false,
+                fetchMsg: '',
+
+                // 功能4: 费用计算
+                fee: {
+                    amount: 100,
+                    years: 5,
+                    freq: '每日',
+                    annualReturn: 10,
+                    fundClass: 'a',
+                    showRates: false,
+                    rates: FEE_DEFAULTS || {}
+                },
+                feeResult: { show: false },
+
+                init() {
+                    this.fundDB = window.FUND_DB || {};
+                },
+
+                switchTab(idx) {
+                    this.activeTab = idx;
+                    // 切到图表标签时重新渲染（解决隐藏DOM无法渲染Chart.js的问题）
+                    if (idx === 0 && this.calcResult.show) setTimeout(() => this.renderCalcChart(), 100);
+                    if (idx === 2 && this.dynaResult.show) setTimeout(() => this.renderDynaChart(), 100);
+                },
+
+                // 格式化数字
+                fmt(n) { return '¥' + Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 0 }); },
+
+                // ===== 功能1 =====
+                runCalc() {
+                    const result = window.runCalculator(this.calc);
+                    this.calcResult = { show: true, ...result };
+                    this.$nextTick(() => this.renderCalcChart());
+                },
+                renderCalcChart() {
+                    renderCalcChart(this.$refs.calcChart, this.calcResult.table);
+                },
+
+                // ===== 功能2 =====
+                runLimitAdvisor() {
+                    const result = window.runLimitAdvisor(this.limit, this.fundDB);
+                    this.limitResult = { show: true, ...result };
+                },
+
+                // ===== 功能3 =====
+                runDyna() {
+                    const result = window.runDynamicDCA(this.dyna);
+                    this.dynaResult = { show: true, ...result };
+                    this.$nextTick(() => this.renderDynaChart());
+                },
+                renderDynaChart() {
+                    renderDynaChart(this.$refs.dynaChart, this.dynaResult);
+                },
+
+                // ===== 获取实时数据 =====
+                fetchMarketData() {
+                    this.fetchingData = true;
+
+                    // 检测是否通过服务器打开
+                    if (window.location.protocol === 'file:') {
+                        this.fetchMsg = '⚠️ 请先运行 node server.js，然后打开 http://localhost:3000';
+                        this.fetchingData = false;
+                        return;
+                    }
+
+                    this.fetchMsg = '正在获取纳斯达克100实时数据...';
+
+                    // 预填PE参考值
+                    this.dyna.currentPE = 37;
+                    this.dyna.referencePE = 25;
+
+                    // 同时请求NDX指数和QQQ历史数据
+                    const base = window.location.origin;
+                    Promise.all([
+                        fetch(base + '/api/ndx').then(r => { if (!r.ok) throw new Error('NDX failed'); return r.json(); }),
+                        fetch(base + '/api/qqq-historical').then(r => { if (!r.ok) throw new Error('QQQ failed'); return r.json(); }),
+                    ])
+                    .then(([ndx, qqq]) => {
+                        const ndxPrice = ndx?.price;
+                        if (ndxPrice && ndxPrice > 0) {
+                            this.dyna.currentPrice = Math.round(ndxPrice);
+                        }
+
+                        const closes = qqq?.closes;
+                        if (closes && closes.length >= 20 && ndxPrice) {
+                            const latestQQQ = closes[closes.length - 1];
+                            const ratio = ndxPrice / latestQQQ;
+                            const ma60 = closes.slice(-60).reduce((a,b)=>a+b,0) / Math.min(60, closes.length);
+                            this.dyna.referenceMA = Math.round(ma60 * ratio);
+                            this.fetchMsg = `✅ NDX=${Math.round(ndxPrice).toLocaleString()} · 60日均线≈${Math.round(ma60 * ratio).toLocaleString()}`;
+                        } else if (ndxPrice) {
+                            this.dyna.referenceMA = Math.round(ndxPrice * 0.93);
+                            this.fetchMsg = `⚠️ NDX=${Math.round(ndxPrice).toLocaleString()}，均线为估算值`;
+                        } else {
+                            this.fetchMsg = '数据获取失败，请手动输入';
+                        }
+                    })
+                    .catch(() => {
+                        this.fetchMsg = '❌ 服务器未启动，请先运行 node server.js';
+                    })
+                    .finally(() => { this.fetchingData = false; });
+                },
+
+                // ===== 功能4 =====
+                runFee() {
+                    const result = window.runFeeCalc(this.fee);
+                    this.feeResult = { show: true, ...result };
+                },
+                toggleFeeRates() {
+                    this.fee.showRates = !this.fee.showRates;
+                },
+                resetFeeRates() {
+                    this.fee.rates = JSON.parse(JSON.stringify(window.FEE_DEFAULTS || {}));
+                }
+            };
+        }
+    </script>
+</body>
+</html>
