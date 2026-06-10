@@ -1,0 +1,104 @@
+/* 自定义样式覆盖/补充 Tailwind */
+
+/* Alpine.js 隐藏未初始化内容 */
+[x-cloak] { display: none !important; }
+
+/* 标签页切换 */
+.tab-active {
+    border-color: #2563eb;
+    color: #2563eb;
+}
+.tab-inactive {
+    border-color: transparent;
+    color: #6b7280;
+}
+.tab-inactive:hover {
+    border-color: #d1d5db;
+    color: #374151;
+}
+
+/* 选项按钮 */
+.btn-option {
+    background: #fff;
+    border-color: #d1d5db;
+    color: #6b7280;
+}
+.btn-option:hover {
+    border-color: #93c5fd;
+    color: #2563eb;
+}
+.btn-option-selected {
+    background: #eff6ff;
+    border-color: #2563eb;
+    color: #2563eb;
+    font-weight: 500;
+}
+
+/* 图表容器 */
+.chart-container {
+    position: relative;
+    width: 100%;
+}
+
+/* 表格样式 */
+table {
+    border-collapse: collapse;
+}
+table th {
+    font-weight: 600;
+    white-space: nowrap;
+}
+table td, table th {
+    border-bottom: 1px solid #f3f4f6;
+}
+
+/* 数字输入框去除上下箭头 */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+input[type="number"] {
+    -moz-appearance: textfield;
+}
+
+/* 移动端优化 */
+@media (max-width: 640px) {
+    body { font-size: 14px; }
+    .chart-container { height: 220px !important; }
+    table { font-size: 12px; }
+}
+
+/* 自定义滚动条 */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+/* range滑块样式 */
+input[type="range"] {
+    height: 6px;
+    border-radius: 3px;
+    background: #e5e7eb;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #2563eb;
+    cursor: pointer;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
